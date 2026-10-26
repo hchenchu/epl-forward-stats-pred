@@ -5,7 +5,7 @@ from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="EPL Forwards Explorer", layout="wide")
 st.title("EPL Forwards Explorer")
-st.caption("Upload the cleaned forwards CSV, explore it with a chart, and predict a stat with a straight line.")
+st.caption("Upload the cleaned forwards CSV, explore it with a chart, and predict wins with a straight line.")
 
 # The numeric columns the app works with, and the columns the file must have.
 NUMERIC_COLS = [
@@ -16,35 +16,10 @@ NUMERIC_COLS = [
 ]
 REQUIRED_COLS = ["Name", "Club", "Position"] + NUMERIC_COLS
 
-# Not every input makes sense for every target.
-# This table lists the inputs that are relevant for each target.
-# (We leave out headed, right-foot and left-foot goals as inputs for Goals,
-# because they simply add up to Goals.)
-TARGET_INPUTS = {
-    "Goals": ["Appearances", "Wins", "Losses", "Shooting accuracy %", "Assists", "Penalties scored", "Freekicks scored"],
-    "Goals per match": ["Appearances", "Shooting accuracy %", "Assists", "Penalties scored", "Freekicks scored"],
-    "Assists": ["Appearances", "Wins", "Losses", "Goals", "Goals per match", "Shooting accuracy %"],
-    "Wins": ["Appearances", "Goals", "Assists", "Goals per match"],
-    "Losses": ["Appearances", "Goals", "Assists", "Yellow cards"],
-    "Headed goals": ["Appearances", "Goals", "Wins"],
-    "Goals with right foot": ["Appearances", "Goals", "Wins", "Shooting accuracy %"],
-    "Goals with left foot": ["Appearances", "Goals", "Wins", "Shooting accuracy %"],
-    "Penalties scored": ["Appearances", "Goals", "Wins"],
-    "Yellow cards": ["Appearances", "Fouls", "Red cards", "Losses"],
-    "Red cards": ["Appearances", "Fouls", "Yellow cards"],
-    "Fouls": ["Appearances", "Yellow cards", "Red cards", "Losses"],
-}
-ALL_INPUTS = [c for c in NUMERIC_COLS if any(c in v for v in TARGET_INPUTS.values())]
-
-
-def targets_for(a, b):
-    # Targets for which both chosen inputs are relevant.
-    return [t for t, inputs in TARGET_INPUTS.items() if a in inputs and b in inputs and t not in (a, b)]
-
-
-def partners_for(a):
-    # Second inputs that share at least one target with the first input.
-    return [b for b in ALL_INPUTS if b != a and targets_for(a, b)]
+# The model predicts Wins.
+# These are the inputs that make sense for it.
+TARGET = "Wins"
+WINS_INPUTS = ["Appearances", "Goals", "Assists", "Goals per match"]
 
 
 # The shape is the same as before.
@@ -57,6 +32,12 @@ if uploaded_file:
     except Exception:
         st.error("This file could not be read as a CSV.")
         st.stop()
+
+    # As soon as the file is read, we show its first 5 rows.
+    # The user can see what was uploaded before anything else happens.
+    st.subheader("Preview of the uploaded data")
+    st.dataframe(df.head(5), hide_index=True)
+    st.caption(f"First 5 of {len(df)} rows. The file has {len(df.columns)} columns.")
 
     # Before we use the file, we check it is the right one.
     # Each check shows a message and stops the app.
@@ -144,11 +125,15 @@ if uploaded_file:
 
     # ---- Tab 2: the prediction ----
     with tab_predict:
-        # Pick two inputs. The target list only shows relevant targets.
-        c1, c2, c3 = st.columns(3)
-        in1 = c1.selectbox("Input 1: what you know", ALL_INPUTS)
-        in2 = c2.selectbox("Input 2: what else you know", partners_for(in1))
-        target = c3.selectbox("Target: what you want to predict", targets_for(in1, in2))
+        # A short note that explains what this model is for.
+        st.write("This model is used to predict the number of wins, given the selected inputs. "
+                 "When the model is wrong, the team may lose more games than predicted.")
+
+        # Pick two inputs. The target is always Wins.
+        c1, c2 = st.columns(2)
+        in1 = c1.selectbox("Input 1: what you know", WINS_INPUTS)
+        in2 = c2.selectbox("Input 2: what else you know", [c for c in WINS_INPUTS if c != in1])
+        target = TARGET
 
         # Then the model, with two input columns this time.
         x = df[[in1, in2]]
